@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "site",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\Users\\edmun\\AppData\\Local\\Temp\\claude\\C--Users-edmun-Documents-GitHub-Eddyo-Spaghettio-github-io\\d9d9c66d-bc12-40a8-bfcc-2ee57cb386ae\\scratchpad\\serve.ps1", "-Root", "C:\\Users\\edmun\\Documents\\GitHub\\Eddyo-Spaghettio.github.io", "-Port", "8000"],
+      "port": 8000
+    }
+  ]
+}
