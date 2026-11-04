@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Whip</title>
+<style>
+  :root {
+    --bg: #f7f5f0; --panel: #ffffff; --ink: #1f2328; --muted: #5f6670;
+    --line: #d9d5cc; --wall: #4a4f57; --floor: #eef0f3;
+    --waver: #c77d12; --loyal: #3d6fb6; --secured: #2e8b57; --whip: #b3261e;
+    --series1: #3d6fb6; --series2: #c77d12;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  h1 { margin: 0.2em 0; font-size: 1.8rem; }
+  h2 { font-size: 1.15rem; margin: 0 0 0.5em; }
+  p { margin: 0.4em 0; }
+  .muted { color: var(--muted); font-size: 0.92rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+           padding: 14px; margin: 14px 0; flex: 1 1 300px; min-width: 0; }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+           background: #fff; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--floor); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+  /* Map */
+  #board { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px;
+           width: 100%; max-width: 390px; aspect-ratio: 1; }
+  .cell { background: var(--floor); border-radius: 4px; position: relative;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 0.72rem; text-align: center; line-height: 1.1; }
+  .cell.wall { background: var(--wall); }
+  .cell.start { outline: 2px dashed var(--line); outline-offset: -4px; }
+  .member { padding: 2px; font-weight: 600; border-radius: 4px; width: 92%; height: 92%;
+            display: flex; flex-direction: column; justify-content: center; color: #fff; }
+  .member.waver { background: var(--waver); }
+  .member.loyal { background: var(--loyal); }
+  .member.secured { background: var(--secured); }
+  .whip { position: absolute; width: 58%; height: 58%; border-radius: 50%;
+          background: var(--whip); color: #fff; font-weight: 700; font-size: 1rem;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
+  .member + .whip { top: 2px; right: 2px; width: 38%; height: 38%; font-size: 0.8rem; } /* don't hide the name */
+  .pad { display: grid; grid-template-columns: repeat(3, 48px); gap: 4px; margin-top: 10px; }
+  .pad button { padding: 8px 0; }
+  .status { font-size: 1.05rem; margin: 6px 0; }
+  .stat b { font-variant-numeric: tabular-nums; }
+
+  /* Reward table */
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  td input { width: 70px; font: inherit; padding: 3px 5px; }
+  code { background: var(--floor); padding: 1px 4px; border-radius: 3px; }
+
+  /* Chart */
+  #chart { width: 100%; height: 300px; display: block; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.9rem; }
+  .swatch { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Whip</h1>
+  <p>You are the party whip. The roll call is in <b>15 moves</b>. Walk the Capitol and visit legislators.
+     Visiting a <span style="color:var(--waver);font-weight:600">wavering</span> member secures their vote.
+     Visiting a <span style="color:var(--loyal);font-weight:600">loyal</span> member does nothing: their vote was never in doubt.
+     <b>The real goal:</b> secure 3 of the 4 votes (all three wavering members) before the roll call.</p>
+
+  <div class="row">
+    <!-- 1. The game -->
+    <section class="panel">
+      <h2>Play</h2>
+      <div id="board"></div>
+      <p class="status" id="status"></p>
+      <p class="stat">Moves left: <b id="movesLeft"></b> &nbsp; Score: <b id="score"></b> &nbsp; Votes secured: <b id="votes"></b></p>
+      <div class="pad">
+        <span></span><button data-dir="0" aria-label="Up">↑</button><span></span>
+        <button data-dir="3" aria-label="Left">←</button><button data-dir="1" aria-label="Down">↓</button><button data-dir="2" aria-label="Right">→</button>
+      </div>
+      <div class="buttons"><button id="newGame">New game</button></div>
+      <p class="muted">Arrow keys work too. Walking into a wall still uses up a move.</p>
+    </section>
+
+    <!-- 2. Rewards -->
+    <section class="panel">
+      <h2>Rewards: what the agent is paid for</h2>
+      <p class="muted">These are the numbers inside <code>reward()</code>. They are added up after every move.
+        Changing them affects your score and all future training, but does not erase what the agent already learned.</p>
+      <p><label>Reward scheme: <select id="scheme"></select></label></p>
+      <p class="muted">Switching schemes doesn't retrain the agent. Press <b>Reset agent</b>, then train, to compare them fairly.</p>
+      <table id="rewardTable"></table>
+      <p class="muted" style="margin-top:10px">The agent only sees these points. It is never told the real goal;
+        the orange line in the chart below checks whether it reached it anyway.</p>
+    </section>
+  </div>
+
+  <!-- 3. Agent -->
+  <section class="panel">
+    <h2>Q-learning agent</h2>
+    <p class="muted">A table with one row per state (whip's square + which members are secured) and one column per move.
+      Exploration ε = 0.2, learning rate α = 0.2, discount γ = 0.95, all values start at 0, ties broken at random, random seed 42.</p>
+    <div class="buttons">
+      <button id="train100">Train 100 games</button>
+      <button id="train1000">Train 1,000 games</button>
+      <button id="resetAgent">Reset agent</button>
+      <button id="watch">Watch it play</button>
+    </div>
+    <p class="stat">Games trained: <b id="gamesTrained">0</b> &nbsp; States: <b id="stateCount"></b> &nbsp; <span id="watchResult"></span></p>
+  </section>
+
+  <!-- 4. Learning curve -->
+  <section class="panel">
+    <h2>Learning curve</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--series1)"></span>Average reward per game (left axis)</span>
+      <span><span class="swatch" style="background:var(--series2)"></span>Share of games reaching the real goal (right axis)</span>
+    </div>
+    <canvas id="chart"></canvas>
+    <p class="muted">Each point averages 50 training games. Training games include exploring (20% random moves), so they score lower than "Watch it play".</p>
+  </section>
+</main>
+
+<script>
+// =====================================================================
+// REWARD: the points the whip gets for one move. Edit these numbers
+// here or with the controls on the page.
+// =====================================================================
+const R = {
+  move:   -1,   // every move costs time before the roll call
+  wall:   -1,   // extra penalty for walking into a wall (wasted move)
+  secure: 10,   // reaching a wavering member and securing their vote
+  loyal:   0,   // reaching a loyal member (changes nothing in the vote count)
+  goal:   20,   // bonus when the third vote is secured (the real goal)
+  meeting: 0,   // walking into ANY legislator's office, even a repeat visit
+};
+
+function reward(events) {
+  let points = 0;
+  points += R.move;                         // time passes on every move
+  if (events.bumped)    points += R.wall;   // bumped a wall, stayed put
+  if (events.secured)   points += R.secure; // flipped a wavering member
+  if (events.metLoyal)  points += R.loyal;  // handshake with a loyal member
+  if (events.goalMet)   points += R.goal;   // all three votes secured
+  if (events.meeting)   points += R.meeting; // "face time": any office visit counts
+  return points;
+}
+
+// Ready-made reward schemes for the dropdown on the page.
+// "Face time" sounds sensible to a campaign (more meetings = more
+// relationships), but it pays for meetings, not for votes.
+const REWARD_SCHEMES = {
+  original: { label: "Original (pays for votes)",
+              values: { move: -1, wall: -1, secure: 10, loyal: 0, goal: 20, meeting: 0 } },
+  facetime: { label: "Face time (also +5 per office visit)",
+              values: { move: -1, wall: -1, secure: 10, loyal: 0, goal: 20, meeting: 5 } },
+};
+
+// Labels for the reward controls on the page.
+const REWARD_LABELS = {
+  move:   "Every move",
+  wall:   "Walking into a wall (extra)",
+  secure: "Securing a wavering member",
+  loyal:  "Visiting a loyal member",
+  goal:   "Bonus: all 3 votes secured",
+  meeting: "Any office visit (face time)",
+};
+
+// =====================================================================
+// THE MAP: 6x6 grid of the Capitol.
+//   #  wall     S  whip's starting square
+//   A, B, C  wavering members     L  loyal member
+// =====================================================================
+const MAP = [
+  "A....C",
+  ".##.#.",
+  "......",
+  ".#L#.B",
+  ".#....",
+  "..S...",
+];
+const SIZE = 6;
+const MAX_MOVES = 15;
+const MEMBERS = {
+  A: { name: "Rep. Alvarez", wavering: true,  bit: 1 },
+  B: { name: "Sen. Brooks",  wavering: true,  bit: 2 },
+  C: { name: "Sen. Chen",    wavering: true,  bit: 4 },
+  L: { name: "Rep. Lee",     wavering: false, bit: 0 },  // loyal: can never be "secured"
+};
+const ALL_SECURED = 1 | 2 | 4;          // bitmask: A, B and C secured
+const MOVES = [[-1, 0], [1, 0], [0, 1], [0, -1]]; // up, down, right, left
+const ARROWS = ["↑", "↓", "→", "←"];
+
+const charAt = (sq) => MAP[Math.floor(sq / SIZE)][sq % SIZE];
+const START = MAP.join("").indexOf("S");
+
+// Give every open (non-wall) square a number 0..N-1 for the Q-table.
+const openIndex = [];
+let openCount = 0;
+for (let sq = 0; sq < SIZE * SIZE; sq++) openIndex[sq] = charAt(sq) === "#" ? -1 : openCount++;
+
+// State = (whip's square, which wavering members are secured).
+// 30 open squares x 8 possible secured sets = 240 states.
+const NUM_STATES = openCount * 8;
+const stateId = (s) => openIndex[s.sq] * 8 + s.secured;
+
+// =====================================================================
+// GAME RULES
+// =====================================================================
+function newGameState() {
+  return { sq: START, secured: 0, movesLeft: MAX_MOVES, done: false };
+}
+
+// Apply one move. Returns the new state, the reward, and what happened.
+function step(s, action) {
+  const r = Math.floor(s.sq / SIZE) + MOVES[action][0];
+  const c = (s.sq % SIZE) + MOVES[action][1];
+  const events = { bumped: false, secured: false, metLoyal: false, goalMet: false, meeting: false };
+  let sq = s.sq;
+  if (r < 0 || r >= SIZE || c < 0 || c >= SIZE || MAP[r][c] === "#") {
+    events.bumped = true;                     // blocked: stay in place
+  } else {
+    sq = r * SIZE + c;
+  }
+  let secured = s.secured;
+  const m = MEMBERS[charAt(sq)];
+  if (m && sq !== s.sq) {                     // stepped onto a member's square
+    events.meeting = true;
+    if (m.wavering && !(secured & m.bit)) { secured |= m.bit; events.secured = true; }
+    if (!m.wavering) events.metLoyal = true;
+  }
+  events.goalMet = events.secured && secured === ALL_SECURED;
+  const movesLeft = s.movesLeft - 1;
+  const done = secured === ALL_SECURED || movesLeft === 0;
+  return { next: { sq, secured, movesLeft, done }, r: reward(events), events };
+}
+
+const votesSecured = (mask) => (mask & 1 ? 1 : 0) + (mask & 2 ? 1 : 0) + (mask & 4 ? 1 : 0);
+
+// =====================================================================
+// SEEDED RANDOM NUMBERS (mulberry32) so every run is reproducible
+// =====================================================================
+function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// =====================================================================
+// Q-LEARNING AGENT
+// =====================================================================
+const EPSILON = 0.2, ALPHA = 0.2, GAMMA = 0.95, SEED = 42;
+let Q, rng, gamesTrained, curve, batch;
+
+function resetAgent() {
+  Q = new Float64Array(NUM_STATES * 4);   // all Q-values start at 0
+  rng = makeRng(SEED);
+  gamesTrained = 0;
+  curve = [];                              // one point per 50 games
+  batch = { reward: 0, wins: 0, n: 0 };
+}
+
+// Best action in a state; ties broken at random.
+function greedy(s, random) {
+  const base = stateId(s) * 4;
+  let best = -Infinity, ties = [];
+  for (let a = 0; a < 4; a++) {
+    const q = Q[base + a];
+    if (q > best) { best = q; ties = [a]; }
+    else if (q === best) ties.push(a);
+  }
+  return ties[Math.floor(random() * ties.length)];
+}
+
+// Epsilon-greedy: explore 20% of the time, otherwise take the best move.
+function chooseAction(s) {
+  if (rng() < EPSILON) return Math.floor(rng() * 4);
+  return greedy(s, rng);
+}
+
+// Play one training game and update the Q-table after every move.
+function trainOneGame() {
+  let s = newGameState(), total = 0;
+  while (!s.done) {
+    const a = chooseAction(s);
+    const { next, r } = step(s, a);
+    // Value of what comes next: 0 once all votes are secured (nothing left
+    // to win), else the best Q there. Running out of moves still looks ahead,
+    // because the state doesn't include the clock: from the agent's point of
+    // view the same square could come with 14 moves left or with 1.
+    let future = 0;
+    if (next.secured !== ALL_SECURED) {
+      const nb = stateId(next) * 4;
+      future = Math.max(Q[nb], Q[nb + 1], Q[nb + 2], Q[nb + 3]);
+    }
+    // Nudge the old estimate toward (reward now + discounted future).
+    const i = stateId(s) * 4 + a;
+    Q[i] += ALPHA * (r + GAMMA * future - Q[i]);
+    total += r;
+    s = next;
+  }
+  // Record results for the learning curve.
+  gamesTrained++;
+  batch.reward += total;
+  batch.wins += s.secured === ALL_SECURED ? 1 : 0;
+  batch.n++;
+  if (batch.n === 50) {
+    curve.push({ games: gamesTrained, avgReward: batch.reward / 50, winShare: batch.wins / 50 });
+    batch = { reward: 0, wins: 0, n: 0 };
+  }
+}
+
+function train(n) {
+  stopWatching();
+  for (let i = 0; i < n; i++) trainOneGame();
+  updateAgentInfo();
+  drawChart();
+}
+
+// =====================================================================
+// PAGE: drawing the board and handling the human player
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+let game, score, watchTimer = null;
+
+function render(s, total, message) {
+  const board = $("board");
+  board.innerHTML = "";
+  for (let sq = 0; sq < SIZE * SIZE; sq++) {
+    const ch = charAt(sq);
+    const cell = document.createElement("div");
+    cell.className = "cell" + (ch === "#" ? " wall" : "") + (ch === "S" ? " start" : "");
+    const m = MEMBERS[ch];
+    if (m) {
+      const isSecured = m.wavering && (s.secured & m.bit);
+      const tag = document.createElement("div");
+      tag.className = "member " + (isSecured ? "secured" : m.wavering ? "waver" : "loyal");
+      tag.innerHTML = m.name.replace(" ", "<br>") + "<br>" +
+        (isSecured ? "✓ secured" : m.wavering ? "wavering" : "loyal");
+      cell.appendChild(tag);
+    }
+    if (sq === s.sq) {
+      const w = document.createElement("div");
+      w.className = "whip"; w.textContent = "W"; w.title = "The whip";
+      cell.appendChild(w);
+    }
+    board.appendChild(cell);
+  }
+  $("movesLeft").textContent = s.movesLeft;
+  $("score").textContent = total;
+  $("votes").textContent = votesSecured(s.secured) + " of 3 wavering";
+  $("status").textContent = message;
+}
+
+function endMessage(s) {
+  return s.secured === ALL_SECURED
+    ? "Roll call: you secured all the votes you needed. Goal reached!"
+    : "Roll call! Only " + votesSecured(s.secured) + " of 3 wavering votes secured. Goal missed.";
+}
+
+function newGame() {
+  stopWatching();
+  game = newGameState();
+  score = 0;
+  render(game, score, "Your move.");
+}
+
+function playerMove(a) {
+  if (watchTimer || game.done) return;
+  const { next, r, events } = step(game, a);
+  game = next;
+  score += r;
+  let msg = "Moved " + ARROWS[a] + " (" + (r >= 0 ? "+" : "") + r + ").";
+  if (events.bumped) msg = "Bumped into a wall (" + r + ").";
+  if (events.secured) msg += " Vote secured!";
+  if (events.metLoyal) msg += " A loyal member: nothing changes.";
+  render(game, score, game.done ? endMessage(game) : msg);
+}
+
+// Watch the trained agent play one game: no exploring, just its best moves.
+// It uses its own fixed random stream for tie-breaks, so watching never
+// changes training results.
+function watch() {
+  stopWatching();
+  const watchRng = makeRng(SEED + 1);
+  let s = newGameState(), total = 0;
+  render(s, total, "Agent is playing...");
+  $("watchResult").textContent = "";
+  watchTimer = setInterval(() => {
+    const a = greedy(s, watchRng);
+    const { next, r } = step(s, a);
+    s = next; total += r;
+    render(s, total, "Agent moved " + ARROWS[a] + " (" + (r >= 0 ? "+" : "") + r + ").");
+    if (s.done) {
+      stopWatching();
+      render(s, total, "Agent: " + endMessage(s));
+      $("watchResult").textContent = "Last watched game: score " + total + ", " +
+        (s.secured === ALL_SECURED ? "goal reached." : "goal missed.");
+      game = { ...s };   // board shows the agent's final position; press New game to play
+      score = total;
+    }
+  }, 350);
+}
+
+function stopWatching() {
+  if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+}
+
+function updateAgentInfo() {
+  $("gamesTrained").textContent = gamesTrained.toLocaleString();
+}
+
+// Reward controls: a scheme dropdown plus one number box per part of reward().
+const rewardInputs = {};
+function buildRewardTable() {
+  const select = $("scheme");
+  for (const [id, scheme] of Object.entries(REWARD_SCHEMES)) select.add(new Option(scheme.label, id));
+  select.addEventListener("change", () => {
+    Object.assign(R, REWARD_SCHEMES[select.value].values);   // load the scheme's numbers
+    for (const key in rewardInputs) rewardInputs[key].value = R[key];
+  });
+
+  const table = $("rewardTable");
+  for (const key of Object.keys(R)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + REWARD_LABELS[key] + "</td><td><code>R." + key + "</code></td>" +
+                   '<td><input type="number" step="1" value="' + R[key] + '"></td>';
+    const input = tr.querySelector("input");
+    rewardInputs[key] = input;
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      if (!isNaN(v)) R[key] = v;
+    });
+    table.appendChild(tr);
+  }
+}
+
+// =====================================================================
+// LEARNING CURVE (plain canvas, two y-axes)
+// =====================================================================
+function drawChart() {
+  const canvas = $("chart");
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue("--muted"), line = css.getPropertyValue("--line");
+  const c1 = css.getPropertyValue("--series1"), c2 = css.getPropertyValue("--series2");
+  const pad = { l: 46, r: 46, t: 12, b: 34 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  ctx.font = "12px system-ui, sans-serif";
+
+  if (curve.length === 0) {
+    ctx.fillStyle = ink; ctx.textAlign = "center";
+    ctx.fillText("Train the agent to see its learning curve (one point per 50 games).", W / 2, H / 2);
+    return;
+  }
+
+  // Axis ranges: reward on the left, share (0-100%) on the right.
+  let lo = Math.min(0, ...curve.map((p) => p.avgReward));
+  let hi = Math.max(0, ...curve.map((p) => p.avgReward));
+  const step10 = Math.max(5, Math.ceil((hi - lo) / 5 / 5) * 5);
+  lo = Math.floor(lo / step10) * step10; hi = Math.ceil(hi / step10) * step10;
+  if (hi === lo) hi = lo + step10;
+  const maxGames = curve[curve.length - 1].games;
+  const x = (g) => pad.l + (curve.length === 1 ? pw / 2 : ((g - 50) / (maxGames - 50)) * pw);
+  const yL = (v) => pad.t + ph - ((v - lo) / (hi - lo)) * ph;
+  const yR = (v) => pad.t + ph - v * ph;
+
+  // Gridlines and left-axis labels.
+  ctx.strokeStyle = line; ctx.fillStyle = ink; ctx.lineWidth = 1;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let v = lo; v <= hi + 1e-9; v += step10) {
+    ctx.beginPath(); ctx.moveTo(pad.l, yL(v)); ctx.lineTo(W - pad.r, yL(v)); ctx.stroke();
+    ctx.fillText(v, pad.l - 6, yL(v));
+  }
+  // Right-axis labels (share of games reaching the goal).
+  ctx.textAlign = "left";
+  for (let k = 0; k <= 4; k++) ctx.fillText(k * 25 + "%", W - pad.r + 6, yR(k / 4));
+  // X-axis labels.
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const ticks = Math.min(curve.length, 6);
+  for (let k = 0; k < ticks; k++) {
+    const p = curve[Math.round((k * (curve.length - 1)) / Math.max(1, ticks - 1))];
+    ctx.fillText(p.games.toLocaleString(), x(p.games), H - pad.b + 6);
+  }
+  ctx.fillText("training games", pad.l + pw / 2, H - 14);
+
+  // The two lines.
+  const plot = (color, yOf) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    curve.forEach((p, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, x(p.games), yOf(p)));
+    ctx.stroke();
+    if (curve.length < 40) {
+      ctx.fillStyle = color;
+      curve.forEach((p) => { ctx.beginPath(); ctx.arc(x(p.games), yOf(p), 2.5, 0, 7); ctx.fill(); });
+    }
+  };
+  plot(c1, (p) => yL(p.avgReward));
+  plot(c2, (p) => yR(p.winShare));
+}
+
+// =====================================================================
+// WIRING
+// =====================================================================
+document.querySelectorAll(".pad button").forEach((b) =>
+  b.addEventListener("click", () => playerMove(+b.dataset.dir)));
+document.addEventListener("keydown", (e) => {
+  const keys = { ArrowUp: 0, ArrowDown: 1, ArrowRight: 2, ArrowLeft: 3 };
+  if (e.key in keys && e.target.tagName !== "INPUT") { e.preventDefault(); playerMove(keys[e.key]); }
+});
+$("newGame").addEventListener("click", newGame);
+$("train100").addEventListener("click", () => train(100));
+$("train1000").addEventListener("click", () => train(1000));
+$("resetAgent").addEventListener("click", () => { stopWatching(); resetAgent(); updateAgentInfo(); drawChart();
+  $("watchResult").textContent = ""; });
+$("watch").addEventListener("click", watch);
+window.addEventListener("resize", drawChart);
+
+$("stateCount").textContent = NUM_STATES + " (" + openCount + " open squares × 8 secured combinations)";
+buildRewardTable();
+resetAgent();
+updateAgentInfo();
+newGame();
+drawChart();
+</script>
+</body>
+</html>
