@@ -1,32 +1,34 @@
-# Edmund Dyer-Essig — personal website
+# Edmund Dyer-Essig — portfolio
 
-A responsive, seven-page static site for GitHub Pages. No build step, external fonts, or dependencies required. Homepage motion uses a small progressive-enhancement JavaScript file; content and navigation work without JavaScript.
+An eight-page static portfolio for GitHub Pages. No build step or third-party runtime dependencies. The homepage uses a small optional JavaScript scroll introduction; navigation and content work without JavaScript.
 
-## Preview
-Open index.html directly in your browser, or run `python3 -m http.server 8000` in this directory and visit http://localhost:8000.
+## Preview and check
+Open index.html in a browser or run `python3 -m http.server 8000` from this directory.
 
-## Review and publish
-Preview this branch locally before merging. GitHub Pages publishes from the repository's configured source branch; merging into that branch may update the live site. This redesign does not change Pages settings.
+Run `python3 tests/check_site.py`, `node --check home.js`, and `node tests/check_home.cjs` to check internal links/anchors, navigation, metadata, sitemap, and animation behavior. Animation tests use browser-API stubs; they do not replace real desktop/mobile browser testing.
 
 ## Pages
-- index.html: concise introduction and selected work
-- projects.html: research and project index
-- ai-security.html, radar.html, sustainability.html: individual project summaries
-- experience.html: education, experience, leadership, and skills
-- about.html: background, interests, and Kyoto experience
+- index.html — introduction, role-relevant project links, selected work, public evidence, contact
+- projects.html — project index
+- ai-security.html, radar.html, sustainability.html — contribution summaries
+- experience.html — education, experience, leadership, skills
+- writing.html — published essay and credited research contribution
+- about.html — background and interests
 
-## Content and editing
-Content comes from the uploaded website; project summaries intentionally do not invent results or metrics. Email comes from the résumé contact details shared in the conversation. Review titles, dates, current roles, and contact details before publishing. Shared navigation and footer are ordinary HTML on each page; update all seven pages if changing them.
+## Editing and publishing
+Edit the HTML directly. Navigation/footer are repeated across all eight pages; update them consistently. styles.css controls the design; home.js controls the homepage animation. Review changes on a branch before merging into the GitHub Pages publishing branch. This change does not modify Pages settings.
 
-The archive contained no résumé PDF. The site has an Experience page without a placeholder download link. Add an approved PDF when available. Review dates, titles, current roles, and contact details before publishing.
+## Content sources and limits
+Existing roles, dates, skills, and contributions come from the original supplied portfolio. New public references:
+- https://blogs.cisco.com/ai/security-framework-v2 — September 2026; credits Edmund for research and development assistance, not authorship.
+- https://stanfordmag.org/contents/stem-education — personal essay by Edmund, Spring 2026.
 
-## Recruiter-focused design
-The homepage presents education, Cisco experience, radar research, and technical skills at a glance. Project summaries use concrete contributions. Robotics remains an interest, not an invented work credential. The design uses neutral backgrounds, sans-serif typography, fine rules, and restrained green accents. The landscape illustration has been removed.
+Copy is a starting draft for Edmund to revise. Robotics is presented as an interest. No NAT title or work details have been inferred from email. No private course, calendar, or inbox content is published.
 
-## Scroll-controlled opening
-On screens with enough vertical space, the introduction stays in place for a short native scroll. The introduction moves upward, the qualifications panel settles into place, and a thin progress rule fills before the project section arrives. No scroll capture or forced timing is used. The homepage offers a direct skip-to-work link and immediate experience/contact links.
+Before publishing, review current titles and dates; add an approved résumé PDF and relevant original project images when available. The site deliberately contains no placeholder résumé download or invented results. No portrait/photo was included in the original upload.
 
-Without JavaScript, with reduced motion, or when the introduction does not fit the screen, everything uses normal document scrolling. All content stays visible. home.js is only used on the homepage.
+## Motion and accessibility
+The introduction briefly stays in place while native scrolling moves the text and qualifications panel. The skip-to-work link bypasses the opening. Reduced-motion preferences, short screens, and missing JavaScript fall back to normal scrolling. Content never depends on animation to become visible.
 
-## Validation
-Checked all local links, assets, anchor targets, and JavaScript syntax. Browser-API stub tests cover animation progress, boundaries, reduced-motion changes, and short-screen fallback. Browser rendering was unavailable; review desktop/mobile appearance before publishing.
+## Validation limitations
+Browser installation was blocked by the editing environment. Desktop/mobile visual checks, keyboard walkthrough, and performance measurements remain outstanding before publication. The automated checks do not claim to validate external links or real browser layout.
